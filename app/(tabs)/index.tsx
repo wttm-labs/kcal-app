@@ -6,11 +6,12 @@ import { useState } from "react";
 import {
   Button, // Container (like a div)
   KeyboardAvoidingView, // Display text
-  Platform, // Input field
+  Platform,
+  Pressable, // Input field
   StyleSheet, // Button
   Text, // Styling system
   TextInput, // Prevent keyboard from converting inputs
-  View, // Detect platform (iOS / Android)
+  View,
 } from 'react-native';
 
 
@@ -25,7 +26,8 @@ export default function HomeScreen() {
   const [garmin, setGarmin] = useState('');
   const [apple, setApple] = useState('');
   const [intake, setIntake] = useState('');
-
+  const [trainingType, setTrainingType] = useState<'strength' | 'running' | 'hiit'>('running');
+  
   // ------------------------------------------
   // RESULT STATE
   // ------------------------------------------
@@ -33,6 +35,24 @@ export default function HomeScreen() {
   // null = no result yet 
   const [realBurn, setRealBurn] = useState<number | null>(null);
   const [deficit, setDeficit] = useState<number | null>(null);
+
+  //--------------------------------------------
+  // SAVED ENTRIES STATE
+  //--------------------------------------------
+  // Stores all saved daily logs (history of entries)
+
+  type Entry = {
+    date: string;
+    garminBurn: number;
+    appleBurn: number;
+    intake: number;
+    trainingType: 'strength' | 'running' | 'hiit';
+    realBurn: number;
+    deficit: number;
+    notes: string;
+  };
+
+  const [entries, setEntries] = useState<Entry[]>([]);
 
   // ------------------------------------------
   // RESULT STATE
@@ -50,18 +70,43 @@ export default function HomeScreen() {
       alert ('Please enter valid numbers');
       return; // stop execution if invalid 
     }
+  
     
     //Calculate avarage burn
     const avg = (g + a)/2;
 
+    let factor = 1
+
+    if (trainingType === 'strength') factor = 0.95;
+    if (trainingType === 'running') factor = 1.00;
+    if (trainingType === 'hiit') factor = 1.05;
+
+    const real = avg * factor;
+
     //Calculate deficit
-    const def = avg - i;
+    const def = real - i;
 
     //Update state -> triggers UI re-render
-    setRealBurn(avg);
+    setRealBurn(real);
     setDeficit(def);
   };
-  
+
+  const handleSaveEntry = () => {
+    if (realBurn === null || deficit === null) return;
+
+    const entry: Entry = {
+      date: '', // later should be more dynamicly 
+      garminBurn: Number(garmin),
+      appleBurn: Number(apple),
+      intake: Number(intake),
+      trainingType,
+      realBurn,
+      deficit,
+      notes: '',
+    };
+
+    setEntries((prev) => [entry, ...prev]);
+  };
   // ------------------------------------------
   // UI RENDER
   // ------------------------------------------
@@ -72,16 +117,18 @@ export default function HomeScreen() {
     >
       <Text style={styles.title}>Kcal Rechner</Text>
       <TextInput 
-      style = {styles.input}
-      placeholder="Garmin Burn"
-      keyboardType="numeric"
-      value={garmin}
-      onChangeText={setGarmin}
+        style = {styles.input}
+        placeholder="Garmin Burn"
+        placeholderTextColor="#8e8e93"
+        keyboardType="numeric"
+        value={garmin}
+        onChangeText={setGarmin}
     />
 
     <TextInput 
       style = {styles.input}
       placeholder="Apple Burn"
+      placeholderTextColor="#8e8e93"
       keyboardType="numeric"
       value={apple}
       onChangeText={setApple}
@@ -90,10 +137,35 @@ export default function HomeScreen() {
     <TextInput
     style={styles.input}
     placeholder="Intake"
+    placeholderTextColor="#8e8e93"
     keyboardType="numeric"
     value={intake}
     onChangeText={setIntake}
     />
+    <Text style={styles.sectionTitle}>Training Type</Text>
+      <View style={styles.buttonRow}>
+        {(['strength', 'running', 'hiit']as const).map((type) => (
+        <Pressable 
+          key={type}
+          onPress={() => setTrainingType(type)}
+          style={({ pressed }) => [
+            styles.typeButton,
+            trainingType === type && styles.typeButtonActive,
+            pressed && styles.typeButtonPressed, 
+          ]}
+        >
+          <Text
+            style={[
+              styles.typeButtonText,
+              trainingType === type && styles.typeButtonTextActive,
+            ]}
+        >
+            {type.toUpperCase()}
+          </Text>
+        </Pressable>
+        ))}
+      </View>
+
 
     <Button title="Calculate" onPress={handleCalculate} />
 
@@ -105,8 +177,40 @@ export default function HomeScreen() {
         <Text style={styles.resultText}>
           Deficit: {deficit?.toFixed(0)} kcal
         </Text>
+
+       
+      <Button 
+      title="Save Entry" 
+      onPress={handleSaveEntry} 
+      disabled={realBurn === null}
+      />
       </View>
      )}
+
+    {entries.length > 0 && (
+      <View style = {{ marginTop: 20 }}>
+        {entries.map ((entry, index) => (
+          <View 
+            key={index}
+            style={{
+              padding: 12,
+              borderWidth: 1,
+              borderColor: '#ddd',
+              borderRadius: 10,
+              marginBottom: 10,
+              backgroundColor: 'ffffff',
+            }}
+          > 
+            <Text style = {{ fontWeight: '600', color: '#111'}}>
+              {entry.trainingType.toUpperCase()}
+            </Text>
+        
+            <Text>Real Burn: {entry.realBurn.toFixed(0)} kcal </Text>
+            <Text> Deficit: {entry.deficit.toFixed(0)} kcal</Text>
+          </View>
+        ))}
+      </View>
+    )}
     </KeyboardAvoidingView>
   );
 }
@@ -121,6 +225,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 20,
     justifyContent: 'center',
+    backgroundColor: '#ffffff',
   },
 
   // Title styling
@@ -128,16 +233,19 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '600',
     marginBottom: 20,
-    textAlign: 'center'
+    textAlign: 'center',
+    color: '#111111',
   },
 
   // Input field styling
   input:{
     borderWidth: 1,
     borderColor: '#ccc',
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 12,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#ffffff',
+    color: '#111111'
   },
 
   // Result container
@@ -150,6 +258,54 @@ const styles = StyleSheet.create({
   resultText: {
     fontSize: 18,
     marginTop: 5,
+  },
+
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 8,
+    marginBottom: 10,
+    textAlign: 'center'
+  },
+
+  buttonRow: {
+    flexDirection: 'row',
+    //justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 20,
+    width: '100%',
+  },
+
+  typeButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: '#d1d1d6',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',// light grey -> transparent
+  },
+
+  typeButtonActive: {
+    backgroundColor: '#ffffff',  
+    borderColor: '#007AFF',
+    borderWidth: 1.5,
+  },
+  typeButtonPressed: {
+    backgroundColor: 'f7f7f7',
+  },
+
+  typeButtonText: {
+    color: '#1c1c1e',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  typeButtonTextActive: {
+    color: '#000000',
+    fontWeight: '700',
+    fontSize: 14,
   },
 
 });
